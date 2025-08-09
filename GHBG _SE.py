@@ -19,10 +19,32 @@
 #Day 23: I have been away from the project for nearly 7 weeks due to relocating across the country. I am going to be getting back into it, though.
 #finished implementing the test for NPCs setting up a 4 bot game of catan. (random road placement rather than smart road placement) complete with resources being distributed on the placement of the second settlement.
 
+#Return to the project:
+#Day 24: Its been a while. Quite a lot to do.
+#Implemented window.mainloop() to allow running tkinter from VSCode.
+#Added a button for a slow, one by one execution of the "setup4Bots" dev case because I wanted to debug it's logic. It might be valuing ports too highly over resource variety or 2/12 resource tiles...
+
+#Day 25: finished road debugger.
+#Identified 3 erroneous road connections and removed them.
+#Fixed bug in setup4Bots() which allowed random road placement on repeat runs of the function.
+#Fixed bug in updateRoadCanBuild() which dropped the first connected road every time.
+#Road-to-road connections are now known-good. Same for Settlment-road connections. Road-Settlements are a WIP.
+
+#Day 26: Implemented road-Settlement node debugger.
+#Added a debug mode to ignore proximity checks to the placeSettlement function.
+#Began work on debugSlimeMold, a function to have an npc algorithm demonstrate how it would build out to fill the island without competition, assuming unlimited resources.
+#began working on determinePathToSettlementNode(self,player,targetSNum)... This one is going to be tricky...
+
+
 #To-Do:
 #Implement a check to ensure the road building road position chosen is legal in playAdevelopmentCard()
 #npc requirement: Each player need to calculate their ideal position for the robber each time a settlement/city is placed. This value is called idealRobberPos and is an int 0-18 representing the 0-indexed hex of choice.
+#There are 3 primary strategies for robber placement, whomsoever holds that which you need to complete a build, whomsoever you are most directly competing with in a race to 
+#    secure a resource and targeting whomsoever is in the lead.
 #NPC requirement: new bestBuildableSettlementPos(playerID) which returns the best pos the player can currently build
+#NPC requirement: Must be able to identify when a player is in competition and with whom
+#   This is the guiding principle for many determinations: When an enemy shares this value or the path between their settlements and their goal and your settlements and your goal 
+#       intersect, they are in competition with you. 
 #NPC requirement: new bestTargetSettlementPos(playerID) which returns the settlementPos of the best settlement the player can build with the fewest number of roads built plus the roadNums required to reach it.
 #change the robber roll on 7 moveTheRobber(robberizer,newpos) to treat the current turn's player as the robberizer instead of random.randint(0,3)
 #abstract and implement turns,
@@ -31,15 +53,16 @@
 #currently, the reaction to 7 being rolled is for every player with 8 or more cards in hand to discard half rounded down. This is non-standard, as
 #players are intended to be able to choose which resources they discard. I will need to add a "choose what to keep" system at some point.
 
+#I should made a dev mode command to run through every settlement node and build all roads that the map thinks are attached to it then resets the map one at a time so I can be 100% sure those are correct...
+
 
 
 #Issues to be fixed:
-#   Unlike IDLE V3.11, the native Python IDE, Visual Studio Code doesn't implicitly handle the tkinter mainloop. Need to explicitly invoke mainloop so that those who haven't configured their VSC for Python can still run this project.
-#   For now, run the code using your latest version of IDLE. If you have Python installed on your machine than it ought to have came with your installation of Python.
 
 #|----------------------------------------------------------------------------------------|
 #Populate from pool with dropout:
 #A drop table is a complete list of all the possible outcomes of an event
+import time
 import random;
 random.seed(a=None,version=2)
 class dropTable:#works as intended
@@ -54,6 +77,7 @@ class dropTable:#works as intended
         return pull
 #|----------------------------------------------------------------------------------------|
 from tkinter import *
+from tkinter import messagebox
 #|----------------------------------------------------------------------------------------|
 class player:
     #The player class exists to aggregate information about the resources available to the player
@@ -92,16 +116,31 @@ class player:
         #holds the development cards a player has played
         self.developmentCardsPlayed=[0,0,0,0,0]#0=soldier,1=vp,2=monopoly,3=road building,4=year of plenty
     def goFish(self):
+        #Returns the status of Resource Cards in the Player's hand and the Developmental Cards played and built
         words = ['Player ',self.name,'\n','bricks:',str(self.hand[0]),' wheat:',str(self.hand[1]),' wool:',str(self.hand[2]),' ore:',str(self.hand[3]),' lumber:',str(self.hand[4]),'\n','Dev Cards played: ',str(self.developmentCardsPlayed),' Dev Cards saved: ',str(self.developmentCardsBuilt)]
         return ' '.join(str(word) for word in words)
     def handSize(self):
+        #Returns the count of cards in the Player's Hand.
         cardsInHand=0;
         for resourceType in self.hand:
             cardsInHand+=resourceType;  # number of that resource card in hand
         return cardsInHand
     def postTrade(self):
+        #Returns the resources offered and in exchange for which resources.
         print("wip");
     def considerTrade(self):
+        #Takes a posted trade and makes the following considerations of the conditions of refusal:
+            #Do I have what they are requesting?
+            #Am I competing with this player? Would this trade enable them to win the competition? (To account for sub-trades, add a "cutthroatTendency" offset or factor to 
+            #   refuse offers with their competitor(s) unless the trade is more favorable than that the offset or the rng roll beats the factor)
+            #Would my handSize exceed 7 after this trade? If so, what are the odds of a rolled 7 before my next turn? If that exceeds my risk tolerance and my best half of post-
+            #   trade hand is not better than my pretrade hand, no deal. (maybe consider it if it still would give you more total cards after a 7 than prior)
+            #Would this trade complete any buildings for me? Can I build that building? Am I giving up what I need to build a better building? 
+            #Am I in competition? Would this trade cost me my next move towards securing primacy in a competition?
+        #Then makes the following considerations of acceptance:
+            #Would this trade complete any buildings for me? Can I build that building? Is it the building I want to build next?
+            #Is the marginal value of the trade to me greater than that to the poster?
+            #Would the items I receive have a greater market value to the other players be greater than that of what I have? Do they have what I need in hand?
         print("WIP");
     def useBankOrPorts(self,these,forThat):
         #3for1=0,2brickfor=1,2wheatfor=2,2woolfor=3,2orefor=4,2lumberfor=5 ;this=0-4, forThat=0-4
@@ -112,7 +151,7 @@ class player:
            self.hand[forThat]+=1
            print("Player",self.name,"has traded",bestOffer,"x",self.resourceIndex[these],"with the bank for",self.resourceIndex[forThat],"at a rate of",bestOffer," to 1")
         else:
-            print("Player",self.name,"doesn't have enough",self.resourceIndex[these],"to trade with the bank for",self.resourceIndex[forThat],"using your best available rate of exchange, ",bestOffer)
+            print("Player",self.name,"doesn't have enough",self.resourceIndex[these],"to trade with the bank for",self.resourceIndex[forThat],"using their best available rate of exchange, ",bestOffer)
     def yields(self,rollNum):
         #player.yields(rollNum) adds to the player's hand the contents of self.yieldOnRoll[rollNum]
         i=0
@@ -402,8 +441,8 @@ class simulation:
         #roadConnections[0] contains a list of lists of the roads connected to themself; used for determining where players can and cannot place roads
         self.roadConnections[0]=[[2,7],[1,3,8],[2,4,8],[3,5,9],[4,6,9],[5,10],[1,11,12],[2,3,13,14],[4,5,15,16],[6,17,18],[7,12,19],[7,11,13,20],[8,12,14,20],[8,13,15,21],[9,14,16,21],[9,15,17,22],[10,16,18,22],[10,17,23],[11,24,25],[12,13,26,27],[14,15,28,29],[16,17,30,31],#1-22
                                  [18,32,33],[19,25,34],[19,24,26,35],[20,25,27,35],[20,26,28,36],[21,27,29,36],[21,28,30,37],[22,29,31,37],[22,30,32,38],[23,31,33,38],[23,32,39],[24,40],[25,26,41,42],[27,28,43,44],[29,30,45,46],[31,32,47,48],[33,49],[34,41,50],[35,40,42,50],#23-41
-                                 [35,41,43,51],[36,42,44,51],[36,43,45,52],[37,44,46,52],[37,45,47,53],[38,46,48,53],[38,47,49,54],[39,48,50,54],[40,41,55],[42,43,56,57],[44,45,58,59],[46,47,60,61],[48,49,62],[50,56,63],[51,55,57,63],[51,56,58,64],[52,57,59,64],[52,58,60,65],#42-59
-                                 [53,59,61,65],[53,60,62,66],[54,61,63,66],[55,56,67],[57,58,68,69],[59,60,70,71],[61,62,72],[63,68],[64,67,69],[64,68,70],[65,69,71],[65,70,72],[66,71]]#60-72
+                                 [35,41,43,51],[36,42,44,51],[36,43,45,52],[37,44,46,52],[37,45,47,53],[38,46,48,53],[38,47,49,54],[39,48,54],[40,41,55],[42,43,56,57],[44,45,58,59],[46,47,60,61],[48,49,62],[50,56,63],[51,55,57,63],[51,56,58,64],[52,57,59,64],[52,58,60,65],#42-59
+                                 [53,59,61,65],[53,60,62,66],[54,61,66],[55,56,67],[57,58,68,69],[59,60,70,71],[61,62,72],[63,68],[64,67,69],[64,68,70],[65,69,71],[65,70,72],[66,71]]#60-72
         #roadConnections[1] contains a list 1-72 of the settlmentNode1-54 which are connected to a given road tile; used for determining where players can and cannot place settlements
         self.roadConnections[1]=[[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[1,9],[3,11],[5,13],[7,15],[8,9],[9,10],[10,11],[11,12],[12,13],[13,14],[14,15],[15,16],[8,18],[10,20],
                                  [12,22],[14,24],[16,26],[17,18],[18,19],[19,20],[20,21],[21,22],[22,23],[23,24],[24,25],[25,26],[26,27],[17,28],[19,30],[21,32],[23,34],[25,36],[27,38],[28,29],
@@ -487,6 +526,149 @@ class simulation:
         self.betaDice=Button(self.window,image=self.diceImages[0],command=lambda: self.rollForTurn(),borderwidth=0)
         self.betaDice.pack(anchor=E,side='left')
 
+#============Start of debug section=======================================================================
+
+    def setup4Bots(self):
+        #Npc def testing, mocks a 4 bot game using lvl2 best settlement assessment logic.
+        pauseLength=2
+        for i in range(0,4):    #First Settlements and roads,
+            bestLoc=simulation_1.determineBestSettlementPosLvl2(i)#0-indexed
+            a,b=simulation_1.settlementNum2ColRow[bestLoc]
+            print("best location",bestLoc+1," a",a," b",b)
+            simulation_1.placeSettlement(a,b,i)
+            #roadNum=simulation_1.players[i].canBuild[1][random.randint(0,len(simulation_1.players[i].canBuild[1])-1)]-1 #Selects a road to build from among this player's legal options.
+            roadNum=simulation_1.settlementNodes[2][bestLoc][random.randint(0,len(simulation_1.settlementNodes[2][bestLoc])-1)]-1 #selects a road to build from among the roads connected to the settlement that was just placed.
+            c,d=simulation_1.roadNum2ColRow[roadNum]
+            simulation_1.placeRoad(c,d,i)
+            if(i>0):
+                time.sleep(pauseLength)
+            self.window.update()
+        for i in range(0,4):    #Second Settlements and roads
+            time.sleep(pauseLength)
+            self.window.update()
+            bestLoc=simulation_1.determineBestSettlementPosLvl2(i)#0-indexed
+            a,b=simulation_1.settlementNum2ColRow[bestLoc]
+            print("best location",bestLoc+1," a",a," b",b)
+            simulation_1.placeSettlement(a,b,3-i)
+            for resource in simulation_1.settlementNodes[1][bestLoc]:  #bestows the resources yielded by the hexes adjacent to the second settlements
+                simulation_1.players[3-i].hand[simulation_1.resourceTiles[resource][0]-1]+=1
+            roadNum=simulation_1.settlementNodes[2][bestLoc][random.randint(0,len(simulation_1.settlementNodes[2][bestLoc])-1)]-1 #selects a road to build from among the roads connected to the settlement that was just placed.
+            c,d=simulation_1.roadNum2ColRow[roadNum]
+            simulation_1.placeRoad(c,d,3-i)
+            simulation_1.updateScoreboard()
+            time.sleep(pauseLength)
+            self.window.update()
+        time.sleep(pauseLength)
+
+    def debugDisplayConnectionsBetweenSettlementNodesAndRoads(self):
+        #To find roads          connected to a settlement node  :   SettlementNodes[2][nodeNum]
+        #To find roads          connected to a road             :   roadConnections[0][roadNum]
+        #To find settlements    connected to a road             :   roadConnections[1][roadNum]
+        #reset the board
+        self.resetTheBoard()
+        self.window.update()
+        pauseLength=0.4
+        #for every settlementNode...
+        ranG=[0,54]
+        player=3
+        #This verifies the roads connected to settlementNodes...
+        for sNum in range(ranG[0],ranG[1]):
+            print("testing settlement # " + str(sNum+1))
+            a,b=self.settlementNum2ColRow[sNum]
+            self.placeSettlement(a,b,player)
+            memoryVault=[]
+            for mem in self.players[player].canBuild[1]: #Because canBuild[1] is being updated with every road built, I have to "cache" the current state of the array after just building the settlement under test.
+                memoryVault.append(mem)             #If I just set memoryVault=self.players[0].canBuild, memoryVault becomes a pointer to the canBuild and thus dynamically updated.
+            print("memory vault: " + str(memoryVault))
+            for road in memoryVault:    #This gets all the legal roads
+                print("memory vault: " + str(memoryVault))
+                c,d=self.roadNum2ColRow[road-1]
+                self.placeRoad(c,d,player)
+            messagebox.showinfo(sNum+1, "Should " + str(sNum+1) + " connect to these roads?")
+            self.window.update()
+            if(sNum!=ranG[1]):
+                self.resetTheBoard()
+            #print the node's coordinates and display it and every road connected to it for t=N seconds, update the window, then remove them and update the window
+            #Maybe use a messagebox to verify them 1 by 1 instead?
+        time.sleep(pauseLength*2)
+        self.resetTheBoard()
+
+    def debugDisplayConnectionsBetweenRoadsAndRoads(self):
+        #This verifies the roads connected to roads...
+        #To find roads          connected to a road             :   roadConnections[0][roadNum]
+        #reset the board
+        self.resetTheBoard()
+        self.window.update()
+        pauseLength=0.4
+        #for every roadNum...
+        ranG=[0,72]
+        player=3
+        #This verifies the roads connected to roads...
+        for rNum in range(ranG[0],ranG[1]):
+            print("testing road # " + str(rNum+1))
+            a,b=self.roadNum2ColRow[rNum]
+            self.placeRoad(a,b,player)
+            memoryVault=[]
+            for mem in self.players[player].canBuild[1]: #Because canBuild[1] is being updated with every road built, I have to "cache" the current state of the array after just building the settlement under test.
+                memoryVault.append(mem)             #If I just set memoryVault=self.players[0].canBuild, memoryVault becomes a pointer to the canBuild and thus dynamically updated.
+            print("memory vault: " + str(memoryVault))
+            for road in memoryVault:    #This gets all the legal roads
+                c,d=self.roadNum2ColRow[road-1]
+                self.placeRoad(c,d,(player+1)%4)   #shifts the color of dependant roads.
+                #self.placeRoad(c,d,player)
+            time.sleep(pauseLength*0.5)
+            messagebox.showinfo(rNum+1, "Should " + str(rNum+1) + " connect to these roads?")
+            self.window.update()
+            if(rNum!=ranG[1]):
+                self.resetTheBoard()
+            #print the node's coordinates and display it and every road connected to it for t=N seconds, update the window, then remove them and update the window
+            #Maybe use a messagebox to verify them 1 by 1 instead?
+        time.sleep(pauseLength*2)
+        self.resetTheBoard()
+
+    def debugDisplayConnectionsBetweenRoadsAndSettlementNodes(self):
+        #This verifies the roads connected to roads...
+        #To find settlements    connected to a road             :   roadConnections[1][roadNum]
+        #reset the board
+        self.resetTheBoard()
+        self.window.update()
+        pauseLength=0.4
+        #for every roadNum...
+        ranG=[0,72]
+        player=3
+        #This verifies the settlementNodes connected to roads...
+        for rNum in range(ranG[0],ranG[1]):
+            print("testing road # " + str(rNum+1))
+            a,b=self.roadNum2ColRow[rNum]
+            self.placeRoad(a,b,player)
+            memoryVault=[]
+            for mem in self.players[player].canBuild[0]: #Because canBuild[1] is being updated with every road built, I have to "cache" the current state of the array after just building the settlement under test.
+                memoryVault.append(mem)             #If I just set memoryVault=self.players[0].canBuild, memoryVault becomes a pointer to the canBuild and thus dynamically updated.
+            print("memory vault: " + str(memoryVault))
+            for settlement in memoryVault:    #This gets all the legal roads
+                c,d=self.settlementNum2ColRow[settlement-1]
+                self.placeSettlement(c,d,(player+1)%4, True)   #shifts the color of dependant settlements.
+                #self.placeRoad(c,d,player)
+            time.sleep(pauseLength*0.5)
+            messagebox.showinfo(rNum+1, "Should " + str(rNum+1) + " connect to this road?")
+            self.window.update()
+            if(rNum!=ranG[1]):
+                self.resetTheBoard()
+            #print the node's coordinates and display it and every road connected to it for t=N seconds, update the window, then remove them and update the window
+            #Maybe use a messagebox to verify them 1 by 1 instead?
+        time.sleep(pauseLength*2)
+        self.resetTheBoard()
+
+    def debugSlimeMold(self):
+        #Build the best settlement on the map, then build roads to the highest quality valid settlement location nearby, repeat until map is full.
+        print("Settlement Sprawl tactic demo, aka - 'The Slime Mold'.")
+        pauseLength=0.2
+        self.window.update()
+
+
+#============End of debug section=======================================================================
+
+
     def menuGen(self):
         self.players = [player(1), player(2), player(3), player(4)]
         #Adds menus to the window.
@@ -495,7 +677,11 @@ class simulation:
         self.gameMenu=Menu(self.mainMenu)
         self.mainMenu.add_cascade(label="Game",menu=self.gameMenu)
         self.gameMenu.add_command(label='Generate new board (dev: Visual Effect Only)',command=self.repopulateTheBoardButtonCommand)
+        self.gameMenu.add_command(label='Set up 4 bots',command=self.setup4Bots)
         self.gameMenu.add_command(label='Reset the game',command=self.resetTheBoard)
+        self.gameMenu.add_command(label='Dev: Show Settlement and Road Node Connections Routine (resets the board)',command=self.debugDisplayConnectionsBetweenSettlementNodesAndRoads)
+        self.gameMenu.add_command(label='Dev: Show Road to Road Node Connections Routine (resets the board)',command=self.debugDisplayConnectionsBetweenRoadsAndRoads)
+        self.gameMenu.add_command(label='Dev: Show Road to Settlement Node Connections Routine (resets the board)',command=self.debugDisplayConnectionsBetweenRoadsAndSettlementNodes)
         #self.gameMenu.add_separator()
         self.gameTurnMenu=Menu(self.mainMenu)
         self.mainMenu.add_cascade(label="turn",menu=self.gameTurnMenu)
@@ -665,6 +851,7 @@ class simulation:
         self.player2Hand.pack(side='right',anchor=N)
         self.player1Hand=Label(self.window,text=self.players[0].goFish())
         self.player1Hand.pack(side='right',anchor=NE)
+
     def buildCity(self,settlementNum,playerID):
         if(settlementNum<0 or settlementNum>53):
             print("invalid settlement location")
@@ -702,10 +889,12 @@ class simulation:
         self.rollForTurn
         #Consider trading with other players-
         #Consider using y
+
     def npcPreRollSoldier(self,playerID):#First, if your settlement has the robber on it and you have fewer than 7 cards in hand, move the robber to the optimal location
         if(self.players[playerID-1].developmentCardsBuilt[0]>0 and self.players[playerID-1].amBeingRobbed and self.players[playerID-1].handSize()<7):#You have a soldier and the robber might deny you resources and you have fewer than 7 cards in hand, so you want to move the robber before you roll.
             self.moveTheRobber(self.players[playerID-1],self.determineIdealRobberPos(playerID))
             self.canPlayDevCard=False
+
     def determineIdealRobberPos(self,playerID):#robberPos is 0-indexed 0-18, returns the optimal robberPos from the given player's perspective. Current implementation is level 1 complexity. see toChooseBestRobberPos.txt for the logic for levels 2 and 3
         bestLoc=0
         highestTally=-7#1 lower than the worst possible
@@ -728,6 +917,7 @@ class simulation:
                 highestTally=tally
         return bestLoc
         #return random.randint(0,18)
+
     def determineBestSettlementPos(self):#returns the highest yielding settlementNum 0-indexed
         plentitude={2:1,3:2,4:3,5:4,6:5,8:5,9:4,10:3,11:2,12:1}
         bestLoc=0
@@ -746,6 +936,7 @@ class simulation:
                 bestLoc=i
         print("highest yield per turn ",bestYPT)
         return bestLoc
+    
     def determineBestSettlementPosLvl2(self,playerID):#returns the highest value yielding settlementNum 0-indexed from the perspective of the input player; Level 2 places a premium on diversifying the resources available to you. (wheat>ore>brick>lumber>wool)
         resourceIndex={0:"Brick",1:"Wheat",2:"Wool",3:"Ore",4:"Lumber"}
         currentResourceYield=self.players[playerID].yieldSummary()
@@ -794,19 +985,32 @@ class simulation:
                     resourcePriorityFactorSumOfBest=resourcePriorityFactor
         print("highest yield per turn ",bestYPT)
         return bestLoc
+    
+    def determinePathToSettlementNode(self,player,targetSNum):
+        #self is the current simulation, within which is an array of players. self.players[player-1] is the object-path to the player object.
+        #The current, player anachronous, board state is accessible via self.cityGrid[1], which requires the col,row to access. use self.cityGrid[0] to convert col,row to settlementNode num.
+        #use a,b=self.settlementNodes[0][settlementNum] to convert settlementNum to col,row values.
+        #The current board state of the player is accessible via player.settlements, player.cities and player.roads. player.canBuild gives [0] settlements and [1] roads.
+        #Might need to use "Dijkstra's algorithm"... or Graph Traversal A* / DFS... maybe monte carlo methods?
+        return False
+
+
     def npcOffer(self,offer):
         return False
+    
     def npcConsider(self,offer):
         return False
+    
     def endTurn(self,playerID):
         self.players[playerID-1].developmentCardsBuilt+=self.players[playerID-1].developmentCardsBuiltThisTurn #transfers dev cards built this turn over to your playable dev cards for use in later turns.
         self.players[playerID-1].developmentCardsBuiltThisTurn=[0,0,0,0,0] #empties out your tray of dev cards that you built this turn and cannot play until at least 1 turn cycle has passed.
+
     #|---NPC Script end---------------------------------------------------------------------------------------------------------------------------------------|
     
     #def offTheMarket(self,thingNums,roadOrSettlement):#something has just been placed on the board. It must now be removed from every player's canBuild
     #    for playerID in self.players:
     #        self.players[playerID].updateBuildableReg(thingNums,roadOrSettlement,playerID)
-    def placeSettlement(self,col,row,playerID): #col,row are in the 1-6,a-k format
+    def placeSettlement(self,col,row,playerID, debug=False): #col,row are in the 1-6,a-k format
         #Implementation(?): after the start of the game, Players keep track of where they can and cannot attempt to build. Every time a piece is placed onto the map these tables are adjusted accordingly.
         #convert 1-6,a-k to (0-53) to utilize the self.settlementNodes[0] and [1] lookup charts.
         settlementNum=self.sNCC[col-1][row-1]-1
@@ -816,10 +1020,12 @@ class simulation:
         if(settlementNum==-1):
             print("invalid settlement location")
             return -1
-        #check for a settlement within 1 tile of the target location
-        if(self.verifySettlementLegality(col,row)==False):
-            print("{} is too close to another settlement!".format(settlementNum))
-            return -2
+        #Disable proximity check when in debug mode...
+        if(not debug):
+            #check for a settlement within 1 tile of the target location
+            if(self.verifySettlementLegality(col,row)==False):
+                print("{} is too close to another settlement!".format(settlementNum))
+                return -2
         if(self.settlementNodes[3][settlementNum]>0):#if a harbor is present
             self.players[playerID].harbors[self.harborGridCoords[self.settlementNodes[3][settlementNum]-1][3]]=1;
         #update the cityGrid[1] grid with the playerID (1+playerID=1-4)
@@ -916,6 +1122,7 @@ class simulation:
                 if(self.cityGrid[1][a+i][b+j]!=0):
                     return False
         return True
+    
     def vSL(self,settlementNum):#internally zero indexes
         #check for a prexisting settlement within 1 tile of the target on the current simulation's cityGrid
         a,b=self.settlementNodes[0][settlementNum-1]
@@ -943,18 +1150,22 @@ class simulation:
                 endOfTheRoad=False#This is set to True if an enemy settlement/city is present in either of the settlementNodes connected to the newly built road (the node behind could never be occupied by an enemy node as that would have prevented the construction of this road.)
                 for node in self.roadConnections[1][obNum-1]:#Now check the settlementNodes touched by the new road
                     #print(self.cityGrid[1][self.settlementNodes[0][node][0]-1][self.settlementNodes[0][node][1]-1]," > 0 , ",self.settlementNodes[0][node][0]-1,", ",self.settlementNodes[0][node][1]-1)
-                    #print("node =",node)
+                    #print("roadUpdateCanbuild: node =",node)
                     #print(self.settlementNodes[0][node-1][0]-1,self.settlementNodes[0][node-1][1]-1)
                     if(self.cityGrid[1][self.settlementNodes[0][node-1][0]-1][self.settlementNodes[0][node-1][1]-1]>0 and self.cityGrid[1][self.settlementNodes[0][node-1][0]-1][self.settlementNodes[0][node-1][1]-1] != playerID+1):
                         endOfTheRoad=True
+                        #print("roadUpdateCanbuild: endOfTheRoad=True")
                     if(self.players[i].canBuild[0].count(node)==0 and self.vSL(node)):#if not present and it's legal, add it.
                         self.players[i].canBuild[0].append(node)
                         self.players[i].canBuild[0].sort
                 if(endOfTheRoad==False):#You cannot build past an enemy settlement, thus only add new roads to canBuild if no enemy settlements were adjacent to the newly constructed road.
+                    print("roadUpdateCanbuild: canBuildRaw =" + str(self.roadConnections[0][obNum-1])) #Its correct here...
                     for road in self.roadConnections[0][obNum-1]:
-                        if(self.players[i].canBuild[1].count(road)==0 and self.players[i].roads.count(road)==0 and self.roadGrid[road-1]==0):#If its not present and the location is empty, add it
+                        #if(self.players[i].canBuild[1].count(road)==0 and self.players[i].roads.count(road)==0 and self.roadGrid[road-1]==0):#If its not present and the location is empty, add it
+                        if(self.players[i].canBuild[1].count(road)==0 and self.roadGrid[road-1]==0):#If its not present and the location is empty, add it
                             self.players[i].canBuild[1].append(road)
                             self.players[i].canBuild[1].sort
+                    print("roadUpdateCanbuild: canBuildStep1 =" + str(self.players[i].canBuild[1])) #Its skipping the lowest
                 if (self.players[i].canBuild[1].count(obNum)>0):
                     self.players[i].canBuild[1].pop(self.players[i].canBuild[1].index(obNum))##remove the road you just built from your list of valid places to build a road
             else:#Another player has just placed a road. Check canBuild[1] for that roadNum and remove it if it is present.
@@ -964,7 +1175,8 @@ class simulation:
             self.players[i].canBuild[0].sort()
             self.players[i].canBuild[1].sort()
             #print(self.players[i].canBuild)
-        print(self.players[0].canBuild)
+        print("Canbuild updated: " + str(self.players[0].canBuild))
+
     def placeRoad(self,col,row,playerID):#col=1-11,row=1-10
         #first check that the player has a brick and a lumber in hand
         #second, check that they have a place to build the road out to (cannot place roads where a road already exists: [1-3,0]; can only place roads adjacent to your own existing roads;
@@ -984,6 +1196,7 @@ class simulation:
         self.players[playerID].roads.append(roadNum)
         self.roadUpdateCanBuild(roadNum+1,playerID)
         #check for longest road and distribute victory points accordingly.
+
     def buyRoad(self,col,row,playerID):#player must have the resources to pay for it
         roadNum=self.colRow2RoadNum[col-1][row-1] #This method is checking the 1-indexed value, not the 0-indexed value. This value is not passed out of the function.
         #print("valid locations: ",self.players[playerID].canBuild[1]," yet you chose: ",roadNum)
@@ -1015,6 +1228,7 @@ class simulation:
                     if(city==settlementNum):
                         x,y=self.settlementGridCoords[settlementNum-1]
                         self.canvas.create_image(x+self.GRIDx-45,y+self.GRID-20,image=self.cities[int(player.name)-1],anchor=NW)
+
     def buyADevelopmentCard(self,playerID):#0=soldier,1=vp,2=monopoly,3=road building,4=year of plenty
         if(playerID<0 or playerID>3):
             print("invalid playerID, value between 0 and 3 expected")
@@ -1028,10 +1242,12 @@ class simulation:
             self.players[playerID].hand[3]=self.players[playerID].hand[3]-1
             self.drawADevelopmentCard(playerID)
             print(playerID,"has drawn a development card")
+
     def drawADevelopmentCard(self,playerID):#0=soldier,1=vp,2=monopoly,3=road building,4=year of plenty
         card=self.developmentCardTable.pullADrop()
         self.players[playerID].developmentCardsBuilt[card]=self.players[playerID].developmentCardsBuilt[card]+1
         self.updateScoreboard()
+
     def playADevelopmentCard(self,playerID,card):#0=soldier,1=vp,2=monopoly,3=road building,4=year of plenty
         if(self.players[playerID].developmentCardsBuilt[card]>0):
             self.players[playerID].developmentCardsBuilt[card]=self.players[playerID].developmentCardsBuilt[card]-1
@@ -1094,9 +1310,11 @@ class simulation:
         #    else:
         #        print(tile);
         #    i+=1;
+
     def showRoad(self):
         print("RoadGrid");
         print(self.roadGrid)
+
     def fillMap(self):
         for node in simulation_1.settlementGridCoords:
             coin=random.randint(0,1)
@@ -1104,6 +1322,7 @@ class simulation:
                 simulation_1.canvas.create_image(node[0]+simulation_1.GRIDx-30,node[1]+simulation_1.GRID-20,image=simulation_1.houses[random.randint(0,3)],anchor=NW)
             else:
                 simulation_1.canvas.create_image(node[0]+simulation_1.GRIDx-45,node[1]+simulation_1.GRID-20,image=simulation_1.cities[random.randint(0,3)],anchor=NW)
+
     def trueFillMap(self):
         for i in range(1,11):
             for j in range(1,12):
@@ -1112,6 +1331,7 @@ class simulation:
         for i in range(1,12):
             for j in range(1,7):
                 self.placeSettlement(j,i,0)
+
     def buyItAll(self):
         self.players[0].hand=[999,999,999,999,999]
         self.placeRoad(1,3,0)
@@ -1153,7 +1373,7 @@ if(False):#Npc def testing, mocks a 4 bot game.
         a,b=simulation_1.settlementNum2ColRow[bestLoc]
         print("best location",bestLoc+1," a",a," b",b)
         simulation_1.placeSettlement(a,b,3-i)
-if(True):#Npc def testing, mocks a 4 bot game using lvl2 best settlement assessment logic.
+if(False):#Npc def testing, mocks a 4 bot game using lvl2 best settlement assessment logic.
     for i in range(0,4):    #First Settlements and roads,
         bestLoc=simulation_1.determineBestSettlementPosLvl2(i)#0-indexed
         a,b=simulation_1.settlementNum2ColRow[bestLoc]
@@ -1246,3 +1466,5 @@ if(False):
 #print(simulation_1.players[1].hand)
 #print(simulation_1.players[0].harbors)
 
+
+simulation_1.window.mainloop()
